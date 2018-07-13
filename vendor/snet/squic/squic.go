@@ -18,9 +18,8 @@ package squic
 import (
 	"crypto/tls"
 
-	// log "github.com/inconshreveable/log15"
+	"github.com/lucas-clemente/quic-go"
 
-	quic "github.com/lucas-clemente/quic-go"
 	"github.com/scionproto/scion/go/lib/addr"
 	"github.com/scionproto/scion/go/lib/common"
 	"github.com/scionproto/scion/go/lib/snet"
@@ -62,11 +61,6 @@ func DialSCIONWithBindSVC(network *snet.Network, laddr, raddr, baddr *snet.Addr,
 	if err != nil {
 		return nil, err
 	}
-	// This prevents from "Error:  NetworkIdleTimeout: No recent network activity.""
-	// var config = &quic.Config{
-	// 	KeepAlive: true,
-	// }
-	// return quic.Dial(sconn, raddr, "host:0", cliTlsCfg, config)
 	// Use dummy hostname, as it's used for SNI, and we're not doing cert verification.
 	return quic.Dial(sconn, raddr, "host:0", cliTlsCfg, nil)
 }

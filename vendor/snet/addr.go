@@ -29,7 +29,8 @@ import (
 var _ net.Addr = (*Addr)(nil)
 var _ flag.Value = (*Addr)(nil)
 
-var addrRegexp = regexp.MustCompile(`^(?P<ia>\d+-\d+),\[(?P<host>[^\]]+)\](?P<port>:\d+)?$`)
+var addrRegexp = regexp.MustCompile(
+	`^(?P<ia>\d+-[\d:A-Fa-f]+),\[(?P<host>[^\]]+)\](?P<port>:\d+)?$`)
 
 type Addr struct {
 	IA          addr.IA
@@ -48,7 +49,7 @@ func (a *Addr) String() string {
 	if a == nil {
 		return "<nil>"
 	}
-	s := fmt.Sprintf("%s,[%s]:%d", a.IA, a.Host, a.L4Port)
+	s := fmt.Sprintf("%s,[%v]:%d", a.IA, a.Host, a.L4Port)
 	return s
 }
 
@@ -93,8 +94,26 @@ func (a *Addr) Copy() *Addr {
 	return newA
 }
 
+// UnmarshalText implements encoding.TextUnmarshaler
+func (a *Addr) UnmarshalText(text []byte) error {
+	if len(text) == 0 {
+		*a = Addr{}
+	}
+	other, err := AddrFromString(string(text))
+	if err != nil {
+		return err
+	}
+	*a = *other
+	return nil
+}
+
+func (a *Addr) IsZero() bool {
+	return a.IA.IsZero() && a.Host == nil && a.L4Port == 0 && a.Path == nil &&
+		a.NextHopHost == nil && a.NextHopPort == 0
+}
+
 // AddrFromString converts an address string of format isd-as,[ipaddr]:port
-// (e.g., 1-10,[192.168.1.1]:80) to a SCION address.
+// (e.g., 1-ff00:0:300,[192.168.1.1]:80) to a SCION address.
 func AddrFromString(s string) (*Addr, error) {
 	parts, err := parseAddr(s)
 	if err != nil {
@@ -104,10 +123,18 @@ func AddrFromString(s string) (*Addr, error) {
 	if err != nil {
 		return nil, common.NewBasicError("Invalid IA string", err, "ia", ia)
 	}
-	ip := net.ParseIP(parts["host"])
-	if ip == nil {
-		return nil, common.NewBasicError("Invalid IP address string", nil, "ip", parts["host"])
+
+	var host addr.HostAddr
+	if hostSVC := addr.HostSVCFromString(parts["host"]); hostSVC != addr.SvcNone {
+		host = hostSVC
+	} else {
+		ip := net.ParseIP(parts["host"])
+		if ip == nil {
+			return nil, common.NewBasicError("Invalid IP address string", nil, "ip", parts["host"])
+		}
+		host = addr.HostFromIP(ip)
 	}
+
 	var port uint64
 	if parts["port"] != "" {
 		var err error
@@ -117,22 +144,18 @@ func AddrFromString(s string) (*Addr, error) {
 			return nil, common.NewBasicError("Invalid port string", err, "port", parts["port"][1:])
 		}
 	}
-	return &Addr{IA: ia, Host: addr.HostFromIP(ip), L4Port: uint16(port)}, nil
+	return &Addr{IA: ia, Host: host, L4Port: uint16(port)}, nil
 }
 
 func parseAddr(s string) (map[string]string, error) {
 	result := make(map[string]string)
 	match := addrRegexp.FindStringSubmatch(s)
 	if len(match) == 0 {
-		return nil, common.NewBasicError("Invalid address", nil, "addr", s)
+		return nil, common.NewBasicError("Invalid address: regex match failed", nil, "addr", s)
 	}
 	for i, name := range addrRegexp.SubexpNames() {
 		if i == 0 {
 			continue
-		}
-		// port is optional, (ia, host) are mandatory
-		if name != "port" && match[i] == "" {
-			return nil, common.NewBasicError("Invalid address", nil, "addr", s)
 		}
 		result[name] = match[i]
 	}

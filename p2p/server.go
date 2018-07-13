@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"strconv"
 	"sync"
 	"time"
 
@@ -482,7 +481,7 @@ func (srv *Server) Start() (err error) {
 			if err != nil {
 				srv.log.Error("Scion address needs to be specified with -scion: %v", err)
 			} else {
-				sciondAddr := "/run/shm/sciond/sd" + strconv.Itoa(int(scionAddr.IA.I)) + "-" + strconv.Itoa(int(scionAddr.IA.A)) + ".sock"
+				sciondAddr := "/run/shm/sciond/default.sock"
 				dispatcherAddr := "/run/shm/dispatcher/default.sock"
 				snet.Init(scionAddr.IA, sciondAddr, dispatcherAddr)
 
